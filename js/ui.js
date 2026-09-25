@@ -34,6 +34,7 @@
     enemyBoard: new Board(),
     ai: new ComputerPlayer(Math.min(...SHIP_TYPES.map((s) => s.size))),
     busy: false,
+    enemyTurnTimer: null,
   };
 
   const playerCells = [];
@@ -228,10 +229,12 @@
 
     state.busy = true;
     setStatus('Enemy is taking aim...');
-    setTimeout(enemyTurn, 650);
+    state.enemyTurnTimer = setTimeout(enemyTurn, 650);
   }
 
   function enemyTurn() {
+    state.enemyTurnTimer = null;
+    if (state.phase !== 'battle') return;
     const target = state.ai.nextShot(state.playerBoard);
     if (!target) {
       state.busy = false;
@@ -264,6 +267,8 @@
   }
 
   function endGame(playerWon) {
+    clearTimeout(state.enemyTurnTimer);
+    state.enemyTurnTimer = null;
     state.phase = 'over';
     state.busy = false;
     el.enemyBoard.classList.add('locked');
@@ -286,6 +291,8 @@
   }
 
   function newGame() {
+    clearTimeout(state.enemyTurnTimer);
+    state.enemyTurnTimer = null;
     state.phase = 'setup';
     state.orientation = 'horizontal';
     state.selectedShipId = SHIP_TYPES[0].id;
