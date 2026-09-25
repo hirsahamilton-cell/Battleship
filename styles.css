@@ -172,13 +172,21 @@ button.ghost {
 
 .board {
   display: grid;
-  grid-template-columns: repeat(10, var(--cell));
-  grid-template-rows: repeat(10, var(--cell));
+  grid-template-columns: 20px repeat(10, var(--cell));
+  grid-template-rows: 18px repeat(10, var(--cell));
   gap: 2px;
   padding: 10px;
   background: #0d2438;
   border: 1px solid #1f3a58;
   border-radius: 10px;
+}
+
+.label {
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 1px;
 }
 
 .cell {

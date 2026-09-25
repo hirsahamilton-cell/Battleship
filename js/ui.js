@@ -42,7 +42,20 @@
   function buildGrid(container, cells, onClick, onHover, onLeave) {
     container.innerHTML = '';
     cells.length = 0;
+
+    container.appendChild(document.createElement('div')).className = 'label corner';
+    for (let col = 0; col < BOARD_SIZE; col++) {
+      const label = document.createElement('div');
+      label.className = 'label';
+      label.textContent = COLUMN_LABELS[col];
+      container.appendChild(label);
+    }
+
     for (let row = 0; row < BOARD_SIZE; row++) {
+      const rowLabel = document.createElement('div');
+      rowLabel.className = 'label';
+      rowLabel.textContent = String(row + 1);
+      container.appendChild(rowLabel);
       for (let col = 0; col < BOARD_SIZE; col++) {
         const cell = document.createElement('button');
         cell.type = 'button';
@@ -161,10 +174,9 @@
   }
 
   function updateCounters() {
-    el.playerRemaining.textContent = String(state.playerBoard.remainingShips().length);
-    el.enemyRemaining.textContent = String(
-      state.phase === 'setup' ? SHIP_TYPES.length : state.enemyBoard.remainingShips().length
-    );
+    const setup = state.phase === 'setup';
+    el.playerRemaining.textContent = String(setup ? SHIP_TYPES.length : state.playerBoard.remainingShips().length);
+    el.enemyRemaining.textContent = String(setup ? SHIP_TYPES.length : state.enemyBoard.remainingShips().length);
   }
 
   function setStatus(text) {
