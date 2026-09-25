@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Battleship</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>Battleship</h1>
+      <p id="status" class="status">Place your fleet to begin.</p>
+    </header>
+
+    <main class="layout">
+      <section class="panel" id="setup-panel">
+        <h2>Your fleet</h2>
+        <ul class="fleet" id="fleet-list"></ul>
+        <div class="controls">
+          <button id="rotate-btn" type="button">Rotate (R)</button>
+          <button id="random-btn" type="button">Random fleet</button>
+          <button id="reset-btn" type="button">Clear</button>
+          <button id="start-btn" type="button" class="primary" disabled>Start battle</button>
+        </div>
+        <p class="hint" id="setup-hint">Pick a ship, hover your waters, click to place.</p>
+      </section>
+
+      <section class="boards">
+        <div class="board-wrap">
+          <h2>Your waters</h2>
+          <div class="board" id="player-board" aria-label="Your board"></div>
+        </div>
+        <div class="board-wrap">
+          <h2>Enemy waters</h2>
+          <div class="board locked" id="enemy-board" aria-label="Enemy board"></div>
+        </div>
+      </section>
+
+      <section class="panel" id="log-panel">
+        <h2>Battle log</h2>
+        <ol class="log" id="log"></ol>
+        <div class="scoreboard">
+          <div><span id="player-remaining">5</span><small>your ships</small></div>
+          <div><span id="enemy-remaining">5</span><small>enemy ships</small></div>
+        </div>
+        <button id="restart-btn" type="button" class="ghost">New game</button>
+      </section>
+    </main>
+
+    <div class="overlay hidden" id="overlay">
+      <div class="overlay-card">
+        <h2 id="overlay-title">Victory</h2>
+        <p id="overlay-text"></p>
+        <button id="overlay-btn" type="button" class="primary">Play again</button>
+      </div>
+    </div>
+
+    <script src="js/game.js"></script>
+    <script src="js/ai.js"></script>
+    <script src="js/ui.js"></script>
+  </body>
+</html>
