@@ -51,6 +51,7 @@
       code: null,
       inRoom: false,
       canReady: false,
+      fleetLocked: false,
       yourTurn: false,
       marks: new Map(),
       enemySunk: 0,
@@ -61,6 +62,7 @@
   const enemyCells = [];
 
   const isOnline = () => state.mode === 'online';
+  const canEditFleet = () => state.phase === 'setup' && !state.online.fleetLocked;
 
   function buildGrid(container, cells, onClick, onHover, onLeave) {
     container.innerHTML = '';
@@ -112,13 +114,13 @@
       const item = document.createElement('li');
       item.className = [
         ship ? 'placed' : '',
-        state.selectedShipId === type.id && state.phase === 'setup' ? 'selected' : '',
+        state.selectedShipId === type.id && canEditFleet() ? 'selected' : '',
         ship && ship.hits >= ship.size ? 'sunk' : '',
       ]
         .filter(Boolean)
         .join(' ');
       item.innerHTML = `<span>${type.name}</span><span class="pips">${'<i></i>'.repeat(type.size)}</span>`;
-      if (state.phase === 'setup') {
+      if (canEditFleet()) {
         item.addEventListener('click', () => {
           state.selectedShipId = type.id;
           renderFleet();
@@ -165,7 +167,7 @@
   }
 
   function previewPlacement(row, col) {
-    if (state.phase !== 'setup') return;
+    if (!canEditFleet()) return;
     const type = selectedShipType();
     clearPreview();
     if (!type) return;
@@ -177,7 +179,7 @@
   }
 
   function handlePlacement(row, col) {
-    if (state.phase !== 'setup') return;
+    if (!canEditFleet()) return;
     const type = selectedShipType();
     if (!type) return;
     if (!state.playerBoard.place(type, row, col, state.orientation)) {
@@ -194,7 +196,7 @@
 
   function updateSetupControls() {
     const allPlaced = state.playerBoard.ships.length === SHIP_TYPES.length;
-    const canStart = allPlaced && (!isOnline() || state.online.canReady);
+    const canStart = allPlaced && canEditFleet() && (!isOnline() || state.online.canReady);
     el.startBtn.disabled = !canStart;
     if (state.phase === 'setup') {
       if (isOnline() && !state.online.inRoom) {
@@ -260,7 +262,7 @@
   function playerFire(row, col) {
     if (state.phase !== 'battle') return;
     if (isOnline()) {
-      if (!state.online.yourTurn) return;
+      if (!state.online.yourTurn || state.online.marks.has(key(row, col))) return;
       state.online.yourTurn = false;
       setStatus('Opponent is taking aim...');
       state.online.net.send({ type: 'fire', row, col });
@@ -360,6 +362,7 @@
     state.online.marks = new Map();
     state.online.enemySunk = 0;
     state.online.yourTurn = false;
+    state.online.fleetLocked = false;
 
     el.overlay.classList.add('hidden');
     el.enemyBoard.classList.add('locked');
@@ -423,6 +426,9 @@
       orientation: ship.orientation,
     }));
     state.online.net.send({ type: 'ready', ships });
+    state.online.fleetLocked = true;
+    clearPreview();
+    renderFleet();
     el.startBtn.disabled = true;
     lockSetupControls(true);
     setStatus('Fleet locked in — waiting for your opponent.');
@@ -446,6 +452,7 @@
   }
 
   function handleServerMessage(message) {
+    if (message.type !== 'error' && message.type !== 'room' && message.type !== 'opponent-left') setOnlineStatus('');
     switch (message.type) {
       case 'room':
         state.online.inRoom = true;
@@ -581,6 +588,7 @@
   buildGrid(el.enemyBoard, enemyCells, playerFire);
 
   el.rotateBtn.addEventListener('click', () => {
+    if (!canEditFleet()) return;
     state.orientation = state.orientation === 'horizontal' ? 'vertical' : 'horizontal';
     setStatus(`Orientation: ${state.orientation}.`);
   });
@@ -635,7 +643,7 @@
 
   document.addEventListener('keydown', (event) => {
     if (event.target === el.joinCode) return;
-    if (event.key.toLowerCase() === 'r' && state.phase === 'setup') el.rotateBtn.click();
+    if (event.key.toLowerCase() === 'r' && canEditFleet()) el.rotateBtn.click();
   });
 
   newGame();
