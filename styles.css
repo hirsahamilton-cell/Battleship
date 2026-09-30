@@ -121,6 +121,53 @@ body {
   gap: 8px;
 }
 
+.mode-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.mode-switch button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.online {
+  margin-bottom: 16px;
+}
+
+.online .controls {
+  grid-template-columns: 1fr auto;
+  grid-auto-flow: row;
+}
+
+.online #create-room-btn {
+  grid-column: 1 / -1;
+}
+
+.online input {
+  font: inherit;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  padding: 9px 12px;
+  border-radius: 6px;
+  border: 1px solid #2a4a6d;
+  background: var(--bg);
+  color: var(--text);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.room-code {
+  margin: 12px 0 0;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 8px;
+  text-align: center;
+  color: var(--accent);
+}
+
 button {
   font: inherit;
   padding: 9px 12px;
@@ -302,7 +349,9 @@ button.ghost {
   place-items: center;
 }
 
-.overlay.hidden {
+.overlay.hidden,
+.online.hidden,
+.room-code.hidden {
   display: none;
 }
 

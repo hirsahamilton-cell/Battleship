@@ -124,4 +124,7 @@ class Board {
   }
 }
 
-window.Battleship = { BOARD_SIZE, SHIP_TYPES, CELL, Board, shipCells, inBounds };
+const Battleship = { BOARD_SIZE, SHIP_TYPES, CELL, Board, shipCells, inBounds };
+
+if (typeof window !== 'undefined') window.Battleship = Battleship;
+if (typeof module !== 'undefined' && module.exports) module.exports = Battleship;

@@ -14,6 +14,21 @@
 
     <main class="layout">
       <section class="panel" id="setup-panel">
+        <div class="mode-switch" role="group" aria-label="Opponent">
+          <button id="mode-ai" type="button" class="active">vs Computer</button>
+          <button id="mode-online" type="button">Online</button>
+        </div>
+
+        <div class="online hidden" id="online-panel">
+          <div class="controls">
+            <button id="create-room-btn" type="button">Create room</button>
+            <input id="join-code" type="text" maxlength="4" placeholder="CODE" aria-label="Room code" />
+            <button id="join-room-btn" type="button">Join</button>
+          </div>
+          <p class="room-code hidden" id="room-code"></p>
+          <p class="hint" id="online-status"></p>
+        </div>
+
         <h2>Your fleet</h2>
         <ul class="fleet" id="fleet-list"></ul>
         <div class="controls">
@@ -57,6 +72,7 @@
 
     <script src="js/game.js"></script>
     <script src="js/ai.js"></script>
+    <script src="js/net.js"></script>
     <script src="js/ui.js"></script>
   </body>
 </html>
