@@ -17,7 +17,7 @@ directly or serve the folder with any static server (`python3 -m http.server 800
 ### Online play
 
 1. Pick **Online** at the top of the left panel.
-2. One player clicks **Create room** and shares the 4-letter code.
+2. One player clicks **Create room** and shares the 4-character code.
 3. The other player types the code and clicks **Join**.
 4. Both place their fleets and press **Start battle**; the room creator fires first. After the game, **Rematch**
    replays in the same room.
