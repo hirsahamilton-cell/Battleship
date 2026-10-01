@@ -130,6 +130,15 @@
     }
   }
 
+  function shipEndClasses(ship, row, col) {
+    const first = ship.cells[0];
+    const last = ship.cells[ship.cells.length - 1];
+    const classes = [ship.orientation === 'horizontal' ? 'ship-h' : 'ship-v'];
+    if (row === first.row && col === first.col) classes.push('ship-start');
+    if (row === last.row && col === last.col) classes.push('ship-end');
+    return classes;
+  }
+
   function renderPlayerBoard() {
     for (let row = 0; row < BOARD_SIZE; row++) {
       for (let col = 0; col < BOARD_SIZE; col++) {
@@ -137,7 +146,7 @@
         const ship = state.playerBoard.shipAt(row, col);
         const shot = state.playerBoard.shotAt(row, col);
         cell.className = 'cell';
-        if (ship) cell.classList.add('ship');
+        if (ship) cell.classList.add('ship', ...shipEndClasses(ship, row, col));
         if (shot === 'miss') cell.classList.add('miss');
         if (shot === 'hit') cell.classList.add(ship && ship.hits >= ship.size ? 'sunk' : 'hit');
       }

@@ -253,6 +253,22 @@ button.ghost {
   background: var(--ship);
 }
 
+.cell.ship-h.ship-start {
+  border-radius: 50% 3px 3px 50%;
+}
+
+.cell.ship-h.ship-end {
+  border-radius: 3px 50% 50% 3px;
+}
+
+.cell.ship-v.ship-start {
+  border-radius: 50% 50% 3px 3px;
+}
+
+.cell.ship-v.ship-end {
+  border-radius: 3px 3px 50% 50%;
+}
+
 .cell.preview {
   background: var(--water-hover);
   outline: 2px solid var(--accent);
