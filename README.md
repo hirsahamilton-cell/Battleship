@@ -14,9 +14,9 @@ npm start
 The server hosts the page and the multiplayer WebSocket hub. For computer-only play you can also open `index.html`
 directly or serve the folder with any static server (`python3 -m http.server 8000`).
 
-### Online play
+### Multiplayer
 
-1. Pick **Online** at the top of the left panel.
+1. Pick **Multiplayer** at the top of the left panel.
 2. One player clicks **Create room** and shares the 4-character code.
 3. The other player types the code and clicks **Join**.
 4. Both place their fleets and press **Start battle**; the room creator fires first. After the game, **Rematch**
