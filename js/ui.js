@@ -1,7 +1,8 @@
-/* Wires the game core and AI to the DOM: placement phase, firing, log and end state. */
+/* Wires the game core, the AI and the online hub to the DOM:
+   placement phase, firing, log and end state. */
 
 (function () {
-  const { BOARD_SIZE, SHIP_TYPES, Board, ComputerPlayer, shipCells } = window.Battleship;
+  const { BOARD_SIZE, SHIP_TYPES, Board, ComputerPlayer, NetClient, shipCells } = window.Battleship;
 
   const el = {
     status: document.getElementById('status'),
@@ -21,12 +22,22 @@
     overlayTitle: document.getElementById('overlay-title'),
     overlayText: document.getElementById('overlay-text'),
     overlayBtn: document.getElementById('overlay-btn'),
+    modeAiBtn: document.getElementById('mode-ai'),
+    modeOnlineBtn: document.getElementById('mode-online'),
+    onlinePanel: document.getElementById('online-panel'),
+    createRoomBtn: document.getElementById('create-room-btn'),
+    joinRoomBtn: document.getElementById('join-room-btn'),
+    joinCode: document.getElementById('join-code'),
+    onlineStatus: document.getElementById('online-status'),
+    roomCode: document.getElementById('room-code'),
   };
 
   const COLUMN_LABELS = 'ABCDEFGHIJ';
   const coord = (row, col) => `${COLUMN_LABELS[col]}${row + 1}`;
+  const key = (row, col) => `${row},${col}`;
 
   const state = {
+    mode: 'ai',
     phase: 'setup',
     orientation: 'horizontal',
     selectedShipId: SHIP_TYPES[0].id,
@@ -35,10 +46,23 @@
     ai: new ComputerPlayer(Math.min(...SHIP_TYPES.map((s) => s.size))),
     busy: false,
     enemyTurnTimer: null,
+    online: {
+      net: null,
+      code: null,
+      inRoom: false,
+      canReady: false,
+      fleetLocked: false,
+      yourTurn: false,
+      marks: new Map(),
+      enemySunk: 0,
+    },
   };
 
   const playerCells = [];
   const enemyCells = [];
+
+  const isOnline = () => state.mode === 'online';
+  const canEditFleet = () => state.phase === 'setup' && !state.online.fleetLocked;
 
   function buildGrid(container, cells, onClick, onHover, onLeave) {
     container.innerHTML = '';
@@ -90,13 +114,13 @@
       const item = document.createElement('li');
       item.className = [
         ship ? 'placed' : '',
-        state.selectedShipId === type.id && state.phase === 'setup' ? 'selected' : '',
+        state.selectedShipId === type.id && canEditFleet() ? 'selected' : '',
         ship && ship.hits >= ship.size ? 'sunk' : '',
       ]
         .filter(Boolean)
         .join(' ');
       item.innerHTML = `<span>${type.name}</span><span class="pips">${'<i></i>'.repeat(type.size)}</span>`;
-      if (state.phase === 'setup') {
+      if (canEditFleet()) {
         item.addEventListener('click', () => {
           state.selectedShipId = type.id;
           renderFleet();
@@ -106,6 +130,15 @@
     }
   }
 
+  function shipEndClasses(ship, row, col) {
+    const first = ship.cells[0];
+    const last = ship.cells[ship.cells.length - 1];
+    const classes = [ship.orientation === 'horizontal' ? 'ship-h' : 'ship-v'];
+    if (row === first.row && col === first.col) classes.push('ship-start');
+    if (row === last.row && col === last.col) classes.push('ship-end');
+    return classes;
+  }
+
   function renderPlayerBoard() {
     for (let row = 0; row < BOARD_SIZE; row++) {
       for (let col = 0; col < BOARD_SIZE; col++) {
@@ -113,7 +146,7 @@
         const ship = state.playerBoard.shipAt(row, col);
         const shot = state.playerBoard.shotAt(row, col);
         cell.className = 'cell';
-        if (ship) cell.classList.add('ship');
+        if (ship) cell.classList.add('ship', ...shipEndClasses(ship, row, col));
         if (shot === 'miss') cell.classList.add('miss');
         if (shot === 'hit') cell.classList.add(ship && ship.hits >= ship.size ? 'sunk' : 'hit');
       }
@@ -124,9 +157,14 @@
     for (let row = 0; row < BOARD_SIZE; row++) {
       for (let col = 0; col < BOARD_SIZE; col++) {
         const cell = cellAt(enemyCells, row, col);
+        cell.className = 'cell';
+        if (isOnline()) {
+          const mark = state.online.marks.get(key(row, col));
+          if (mark) cell.classList.add(mark);
+          continue;
+        }
         const shot = state.enemyBoard.shotAt(row, col);
         const ship = state.enemyBoard.shipAt(row, col);
-        cell.className = 'cell';
         if (shot === 'miss') cell.classList.add('miss');
         if (shot === 'hit') cell.classList.add(ship && ship.hits >= ship.size ? 'sunk' : 'hit');
       }
@@ -138,7 +176,7 @@
   }
 
   function previewPlacement(row, col) {
-    if (state.phase !== 'setup') return;
+    if (!canEditFleet()) return;
     const type = selectedShipType();
     clearPreview();
     if (!type) return;
@@ -150,7 +188,7 @@
   }
 
   function handlePlacement(row, col) {
-    if (state.phase !== 'setup') return;
+    if (!canEditFleet()) return;
     const type = selectedShipType();
     if (!type) return;
     if (!state.playerBoard.place(type, row, col, state.orientation)) {
@@ -167,9 +205,16 @@
 
   function updateSetupControls() {
     const allPlaced = state.playerBoard.ships.length === SHIP_TYPES.length;
-    el.startBtn.disabled = !allPlaced;
+    const canStart = allPlaced && canEditFleet() && (!isOnline() || state.online.canReady);
+    el.startBtn.disabled = !canStart;
     if (state.phase === 'setup') {
-      setStatus(allPlaced ? 'Fleet ready — start the battle.' : 'Place your fleet to begin.');
+      if (isOnline() && !state.online.inRoom) {
+        setStatus('Create a room or join one with a code.');
+      } else if (isOnline() && !state.online.canReady) {
+        setStatus('Waiting for an opponent to join...');
+      } else {
+        setStatus(allPlaced ? 'Fleet ready — start the battle.' : 'Place your fleet to begin.');
+      }
     }
     updateCounters();
   }
@@ -177,7 +222,13 @@
   function updateCounters() {
     const setup = state.phase === 'setup';
     el.playerRemaining.textContent = String(setup ? SHIP_TYPES.length : state.playerBoard.remainingShips().length);
-    el.enemyRemaining.textContent = String(setup ? SHIP_TYPES.length : state.enemyBoard.remainingShips().length);
+    if (setup) {
+      el.enemyRemaining.textContent = String(SHIP_TYPES.length);
+    } else if (isOnline()) {
+      el.enemyRemaining.textContent = String(SHIP_TYPES.length - state.online.enemySunk);
+    } else {
+      el.enemyRemaining.textContent = String(state.enemyBoard.remainingShips().length);
+    }
   }
 
   function setStatus(text) {
@@ -192,16 +243,24 @@
     el.log.scrollTop = el.log.scrollHeight;
   }
 
+  function lockSetupControls(locked) {
+    el.rotateBtn.disabled = locked;
+    el.randomBtn.disabled = locked;
+    el.resetBtn.disabled = locked;
+  }
+
   function startBattle() {
     if (state.playerBoard.ships.length !== SHIP_TYPES.length) return;
+    if (isOnline()) {
+      sendFleet();
+      return;
+    }
     state.enemyBoard.placeRandomly(SHIP_TYPES);
     state.ai.reset();
     state.phase = 'battle';
     el.enemyBoard.classList.remove('locked');
     el.startBtn.disabled = true;
-    el.rotateBtn.disabled = true;
-    el.randomBtn.disabled = true;
-    el.resetBtn.disabled = true;
+    lockSetupControls(true);
     el.setupHint.textContent = 'Click enemy waters to fire.';
     renderFleet();
     updateCounters();
@@ -210,7 +269,15 @@
   }
 
   function playerFire(row, col) {
-    if (state.phase !== 'battle' || state.busy) return;
+    if (state.phase !== 'battle') return;
+    if (isOnline()) {
+      if (!state.online.yourTurn || state.online.marks.has(key(row, col))) return;
+      state.online.yourTurn = false;
+      setStatus('Opponent is taking aim...');
+      state.online.net.send({ type: 'fire', row, col });
+      return;
+    }
+    if (state.busy) return;
     const shot = state.enemyBoard.receiveShot(row, col);
     if (!shot) return;
 
@@ -234,7 +301,7 @@
 
   function enemyTurn() {
     state.enemyTurnTimer = null;
-    if (state.phase !== 'battle') return;
+    if (state.phase !== 'battle' || isOnline()) return;
     const target = state.ai.nextShot(state.playerBoard);
     if (!target) {
       state.busy = false;
@@ -272,12 +339,13 @@
     state.phase = 'over';
     state.busy = false;
     el.enemyBoard.classList.add('locked');
-    revealEnemyFleet();
+    if (!isOnline()) revealEnemyFleet();
     setStatus(playerWon ? 'You win!' : 'Your fleet was destroyed.');
     el.overlayTitle.textContent = playerWon ? 'Victory' : 'Defeat';
     el.overlayText.textContent = playerWon
       ? 'The enemy fleet lies at the bottom of the sea.'
       : 'Every one of your ships has been sunk.';
+    el.overlayBtn.textContent = isOnline() ? 'Rematch' : 'Play again';
     el.overlay.classList.remove('hidden');
   }
 
@@ -290,7 +358,7 @@
     }
   }
 
-  function newGame() {
+  function resetBoards() {
     clearTimeout(state.enemyTurnTimer);
     state.enemyTurnTimer = null;
     state.phase = 'setup';
@@ -300,13 +368,14 @@
     state.enemyBoard = new Board();
     state.ai.reset();
     state.busy = false;
+    state.online.marks = new Map();
+    state.online.enemySunk = 0;
+    state.online.yourTurn = false;
+    state.online.fleetLocked = false;
 
     el.overlay.classList.add('hidden');
     el.enemyBoard.classList.add('locked');
-    el.log.innerHTML = '';
-    el.rotateBtn.disabled = false;
-    el.randomBtn.disabled = false;
-    el.resetBtn.disabled = false;
+    lockSetupControls(false);
     el.setupHint.textContent = 'Pick a ship, hover your waters, click to place.';
 
     renderPlayerBoard();
@@ -315,10 +384,220 @@
     updateSetupControls();
   }
 
+  function newGame() {
+    if (isOnline()) {
+      leaveRoom();
+      el.log.innerHTML = '';
+      resetBoards();
+      return;
+    }
+    el.log.innerHTML = '';
+    resetBoards();
+  }
+
+  /* ---- online play ---- */
+
+  function setOnlineStatus(text) {
+    el.onlineStatus.textContent = text;
+  }
+
+  function showRoomCode(code) {
+    state.online.code = code;
+    el.roomCode.textContent = code || '';
+    el.roomCode.classList.toggle('hidden', !code);
+  }
+
+  function ensureConnection() {
+    if (!state.online.net) {
+      state.online.net = new NetClient(handleServerMessage, handleDisconnect);
+    }
+    return state.online.net.connect();
+  }
+
+  function withConnection(action) {
+    setOnlineStatus('Connecting...');
+    ensureConnection().then(
+      () => {
+        setOnlineStatus('');
+        action();
+      },
+      () => {
+        setOnlineStatus('Could not reach the game server. Start it with "npm start" and reload.');
+      }
+    );
+  }
+
+  function sendFleet() {
+    const ships = state.playerBoard.ships.map((ship) => ({
+      id: ship.id,
+      row: ship.cells[0].row,
+      col: ship.cells[0].col,
+      orientation: ship.orientation,
+    }));
+    state.online.net.send({ type: 'ready', ships });
+    state.online.fleetLocked = true;
+    clearPreview();
+    renderFleet();
+    el.startBtn.disabled = true;
+    lockSetupControls(true);
+    setStatus('Fleet locked in — waiting for your opponent.');
+  }
+
+  function leaveRoom() {
+    if (state.online.net) state.online.net.close();
+    state.online.net = null;
+    state.online.inRoom = false;
+    state.online.canReady = false;
+    showRoomCode(null);
+    setOnlineStatus('');
+  }
+
+  function handleDisconnect() {
+    if (!isOnline()) return;
+    state.online.inRoom = false;
+    state.online.canReady = false;
+    showRoomCode(null);
+    setOnlineStatus('Disconnected from the game server.');
+  }
+
+  function handleServerMessage(message) {
+    if (message.type !== 'error' && message.type !== 'room' && message.type !== 'opponent-left') setOnlineStatus('');
+    switch (message.type) {
+      case 'room':
+        state.online.inRoom = true;
+        state.online.canReady = message.players === 2;
+        showRoomCode(message.code);
+        setOnlineStatus(
+          message.players === 2 ? 'Opponent connected.' : 'Share this code with your opponent.'
+        );
+        updateSetupControls();
+        break;
+
+      case 'place':
+        el.log.innerHTML = '';
+        state.online.canReady = true;
+        resetBoards();
+        addLog('Opponent connected — place your fleet.');
+        break;
+
+      case 'opponent-ready':
+        addLog('Opponent has placed their fleet.', 'enemy');
+        break;
+
+      case 'waiting':
+        setStatus('Fleet locked in — waiting for your opponent.');
+        break;
+
+      case 'start':
+        state.phase = 'battle';
+        state.online.yourTurn = !!message.yourTurn;
+        el.enemyBoard.classList.toggle('locked', !message.yourTurn);
+        el.startBtn.disabled = true;
+        lockSetupControls(true);
+        el.setupHint.textContent = 'Click enemy waters to fire.';
+        renderFleet();
+        updateCounters();
+        addLog('Battle stations! Both fleets are deployed.');
+        setStatus(message.yourTurn ? 'Your turn — fire at enemy waters.' : 'Opponent fires first.');
+        break;
+
+      case 'shot':
+        applyOnlineShot(message);
+        break;
+
+      case 'turn':
+        state.online.yourTurn = !!message.yours;
+        el.enemyBoard.classList.toggle('locked', !message.yours);
+        setStatus(message.yours ? 'Your turn — fire at enemy waters.' : 'Opponent is taking aim...');
+        break;
+
+      case 'game-over':
+        if (message.fleet) revealOnlineFleet(message.fleet, message.won);
+        endGame(!!message.won);
+        break;
+
+      case 'opponent-left':
+        state.online.canReady = false;
+        addLog('Opponent left the room.', 'enemy');
+        setOnlineStatus('Opponent left — waiting for someone to join with your code.');
+        el.overlay.classList.add('hidden');
+        resetBoards();
+        break;
+
+      case 'error':
+        setOnlineStatus(message.message);
+        if (state.phase === 'battle' && !state.online.yourTurn && message.message.includes('already fired')) {
+          state.online.yourTurn = true;
+          setStatus('Your turn — fire at enemy waters.');
+        }
+        break;
+
+      default:
+        break;
+    }
+  }
+
+  function applyOnlineShot(message) {
+    const { row, col, result, sunk, ship, by } = message;
+    if (by === 'you') {
+      const mark = result === 'hit' ? (sunk ? 'sunk' : 'hit') : 'miss';
+      state.online.marks.set(key(row, col), mark);
+      if (sunk && Array.isArray(message.cells)) {
+        for (const c of message.cells) state.online.marks.set(key(c.row, c.col), 'sunk');
+        state.online.enemySunk += 1;
+      }
+      renderEnemyBoard();
+      addLog(
+        result === 'hit'
+          ? sunk
+            ? `You sank the enemy ${ship} at ${coord(row, col)}!`
+            : `Hit at ${coord(row, col)}.`
+          : `Miss at ${coord(row, col)}.`
+      );
+    } else {
+      state.playerBoard.receiveShot(row, col);
+      renderPlayerBoard();
+      renderFleet();
+      addLog(
+        result === 'hit'
+          ? sunk
+            ? `Opponent sank your ${ship} at ${coord(row, col)}!`
+            : `Opponent hit your ${ship} at ${coord(row, col)}.`
+          : `Opponent missed at ${coord(row, col)}.`,
+        'enemy'
+      );
+    }
+    updateCounters();
+  }
+
+  function revealOnlineFleet(fleet, won) {
+    if (won) return;
+    for (const ship of fleet) {
+      for (const c of ship.cells) {
+        if (!state.online.marks.has(key(c.row, c.col))) state.online.marks.set(key(c.row, c.col), 'ship');
+      }
+    }
+    renderEnemyBoard();
+  }
+
+  function setMode(mode) {
+    if (state.mode === mode) return;
+    if (isOnline()) leaveRoom();
+    state.mode = mode;
+    el.modeAiBtn.classList.toggle('active', mode === 'ai');
+    el.modeOnlineBtn.classList.toggle('active', mode === 'online');
+    el.onlinePanel.classList.toggle('hidden', mode !== 'online');
+    el.log.innerHTML = '';
+    resetBoards();
+  }
+
+  /* ---- wiring ---- */
+
   buildGrid(el.playerBoard, playerCells, handlePlacement, previewPlacement, clearPreview);
   buildGrid(el.enemyBoard, enemyCells, playerFire);
 
   el.rotateBtn.addEventListener('click', () => {
+    if (!canEditFleet()) return;
     state.orientation = state.orientation === 'horizontal' ? 'vertical' : 'horizontal';
     setStatus(`Orientation: ${state.orientation}.`);
   });
@@ -340,10 +619,40 @@
 
   el.startBtn.addEventListener('click', startBattle);
   el.restartBtn.addEventListener('click', newGame);
-  el.overlayBtn.addEventListener('click', newGame);
+
+  el.overlayBtn.addEventListener('click', () => {
+    if (isOnline() && state.online.net && state.online.net.connected) {
+      state.online.net.send({ type: 'rematch' });
+      el.overlay.classList.add('hidden');
+      setStatus('Waiting for the rematch...');
+      return;
+    }
+    newGame();
+  });
+
+  el.modeAiBtn.addEventListener('click', () => setMode('ai'));
+  el.modeOnlineBtn.addEventListener('click', () => setMode('online'));
+
+  el.createRoomBtn.addEventListener('click', () => {
+    withConnection(() => state.online.net.send({ type: 'create' }));
+  });
+
+  el.joinRoomBtn.addEventListener('click', () => {
+    const code = el.joinCode.value.trim().toUpperCase();
+    if (!code) {
+      setOnlineStatus('Enter a room code first.');
+      return;
+    }
+    withConnection(() => state.online.net.send({ type: 'join', code }));
+  });
+
+  el.joinCode.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') el.joinRoomBtn.click();
+  });
 
   document.addEventListener('keydown', (event) => {
-    if (event.key.toLowerCase() === 'r' && state.phase === 'setup') el.rotateBtn.click();
+    if (event.target === el.joinCode) return;
+    if (event.key.toLowerCase() === 'r' && canEditFleet()) el.rotateBtn.click();
   });
 
   newGame();

@@ -36,6 +36,14 @@ for (let game = 0; game < GAMES; game++) {
     }
   }
   assert(occupied.size === totalCells, 'unexpected number of occupied cells');
+  assert(
+    SHIP_TYPES.every((type) => board.ships.filter((ship) => ship.id === type.id).length === 1),
+    'random fleet must contain each ship exactly once'
+  );
+  for (const ship of board.ships) {
+    const { row, col } = ship.cells[0];
+    assert(!board.touchesOtherShip(row, col, ship.size, ship.orientation, ship.id), 'random ships touch');
+  }
 
   const ai = new ComputerPlayer(Math.min(...SHIP_TYPES.map((s) => s.size)));
   let shots = 0;

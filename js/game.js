@@ -75,18 +75,37 @@ class Board {
     this.shots.clear();
   }
 
-  placeRandomly(types = SHIP_TYPES) {
-    this.clear();
-    for (const type of types) {
-      let placed = false;
-      while (!placed) {
-        const orientation = Math.random() < 0.5 ? 'horizontal' : 'vertical';
-        const row = Math.floor(Math.random() * BOARD_SIZE);
-        const col = Math.floor(Math.random() * BOARD_SIZE);
-        placed = this.place(type, row, col, orientation);
+  touchesOtherShip(row, col, size, orientation, ignoreShipId = null) {
+    return shipCells(row, col, size, orientation).some((c) => {
+      for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+          const occupant = this.shipAt(c.row + dr, c.col + dc);
+          if (occupant && occupant.id !== ignoreShipId) return true;
+        }
       }
+      return false;
+    });
+  }
+
+  placeRandomly(types = SHIP_TYPES) {
+    for (;;) {
+      this.clear();
+      if (types.every((type) => this.tryPlaceRandomly(type))) return;
     }
   }
+
+  tryPlaceRandomly(type, attempts = 200) {
+    for (let i = 0; i < attempts; i++) {
+      const orientation = Math.random() < 0.5 ? 'horizontal' : 'vertical';
+      const row = Math.floor(Math.random() * BOARD_SIZE);
+      const col = Math.floor(Math.random() * BOARD_SIZE);
+      if (!this.canPlace(row, col, type.size, orientation, type.id)) continue;
+      if (this.touchesOtherShip(row, col, type.size, orientation, type.id)) continue;
+      return this.place(type, row, col, orientation);
+    }
+    return false;
+  }
+
 
   alreadyShot(row, col) {
     return this.shots.has(Board.key(row, col));
@@ -124,4 +143,7 @@ class Board {
   }
 }
 
-window.Battleship = { BOARD_SIZE, SHIP_TYPES, CELL, Board, shipCells, inBounds };
+const Battleship = { BOARD_SIZE, SHIP_TYPES, CELL, Board, shipCells, inBounds };
+
+if (typeof window !== 'undefined') window.Battleship = Battleship;
+if (typeof module !== 'undefined' && module.exports) module.exports = Battleship;

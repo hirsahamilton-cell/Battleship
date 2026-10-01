@@ -1,0 +1,13 @@
+{
+  "name": "battleship",
+  "version": "1.1.0",
+  "private": true,
+  "description": "Browser Battleship with an AI opponent and online multiplayer.",
+  "scripts": {
+    "start": "node server/server.js",
+    "test": "node test/simulate.js && node test/multiplayer.js"
+  },
+  "dependencies": {
+    "ws": "8.18.0"
+  }
+}
