@@ -19,6 +19,12 @@ const CONTENT_TYPES = {
   '.ico': 'image/x-icon',
 };
 
+const PUBLIC_FILES = new Set([
+  'index.html',
+  'styles.css',
+  ...fs.readdirSync(path.join(ROOT, 'js')).filter((name) => name.endsWith('.js')).map((name) => `js/${name}`),
+]);
+
 function resolveStatic(urlPath) {
   let relative;
   try {
@@ -26,15 +32,13 @@ function resolveStatic(urlPath) {
   } catch (err) {
     return null;
   }
-  if (relative.split('/').some((part) => part.startsWith('.') || part === 'node_modules')) return null;
-  const target = path.join(ROOT, relative === '' ? 'index.html' : relative);
-  if (!target.startsWith(ROOT + path.sep)) return null;
-  return target;
+  if (relative === '') relative = 'index.html';
+  return PUBLIC_FILES.has(relative) ? path.join(ROOT, relative) : null;
 }
 
 const server = http.createServer((req, res) => {
   const file = resolveStatic(req.url || '/');
-  if (!file || !fs.existsSync(file) || !fs.statSync(file).isFile()) {
+  if (!file) {
     res.writeHead(404, { 'content-type': 'text/plain' });
     res.end('Not found');
     return;
@@ -44,7 +48,7 @@ const server = http.createServer((req, res) => {
 });
 
 const hub = new Hub();
-const wss = new WebSocketServer({ server });
+const wss = new WebSocketServer({ server, maxPayload: 4 * 1024 });
 
 wss.on('connection', (socket) => {
   const client = hub.connect((message) => {

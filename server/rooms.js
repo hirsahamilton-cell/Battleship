@@ -33,9 +33,10 @@ function fleetLayout(board) {
 }
 
 class Hub {
-  constructor({ random = Math.random } = {}) {
+  constructor({ random = Math.random, maxRooms = 500 } = {}) {
     this.rooms = new Map();
     this.random = random;
+    this.maxRooms = maxRooms;
     this.nextClientId = 1;
   }
 
@@ -84,6 +85,7 @@ class Hub {
 
   create(client) {
     if (client.room) return this.fail(client, 'You are already in a room.');
+    if (this.rooms.size >= this.maxRooms) return this.fail(client, 'The server is full. Try again later.');
     const code = this.freeCode();
     const room = { code, clients: [client], phase: 'waiting', turn: null };
     this.rooms.set(code, room);
