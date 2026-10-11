@@ -190,4 +190,19 @@ function boardFor(ships) {
   assert(client.last('error'), 'placing a fleet outside a room is rejected');
 }
 
+/* --- room cap --- */
+{
+  const hub = new Hub({ maxRooms: 2 });
+  const a = makeClient(hub, 'a');
+  const b = makeClient(hub, 'b');
+  const c = makeClient(hub, 'c');
+  a.send_({ type: 'create' });
+  b.send_({ type: 'create' });
+  c.send_({ type: 'create' });
+  assert(hub.rooms.size === 2 && !c.last('room') && c.last('error'), 'rooms beyond the cap are rejected');
+  hub.disconnect(a);
+  c.send_({ type: 'create' });
+  assert(c.last('room'), 'a freed slot can be reused');
+}
+
 console.log('OK — multiplayer hub: rooms, validation, turn order, rematch and disconnects.');

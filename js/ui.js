@@ -407,21 +407,20 @@
     el.roomCode.classList.toggle('hidden', !code);
   }
 
-  function ensureConnection() {
+  function withConnection(action) {
     if (!state.online.net) {
       state.online.net = new NetClient(handleServerMessage, handleDisconnect);
     }
-    return state.online.net.connect();
-  }
-
-  function withConnection(action) {
+    const net = state.online.net;
     setOnlineStatus('Connecting...');
-    ensureConnection().then(
+    net.connect().then(
       () => {
+        if (state.online.net !== net) return;
         setOnlineStatus('');
-        action();
+        action(net);
       },
       () => {
+        if (state.online.net !== net) return;
         setOnlineStatus('Could not reach the game server. Start it with "npm start" and reload.');
       }
     );
@@ -454,9 +453,14 @@
 
   function handleDisconnect() {
     if (!isOnline()) return;
+    const hadGame = state.phase !== 'setup' || state.online.fleetLocked;
     state.online.inRoom = false;
     state.online.canReady = false;
     showRoomCode(null);
+    if (hadGame) {
+      el.log.innerHTML = '';
+      resetBoards();
+    }
     setOnlineStatus('Disconnected from the game server.');
   }
 
@@ -634,7 +638,7 @@
   el.modeOnlineBtn.addEventListener('click', () => setMode('online'));
 
   el.createRoomBtn.addEventListener('click', () => {
-    withConnection(() => state.online.net.send({ type: 'create' }));
+    withConnection((net) => net.send({ type: 'create' }));
   });
 
   el.joinRoomBtn.addEventListener('click', () => {
@@ -643,7 +647,7 @@
       setOnlineStatus('Enter a room code first.');
       return;
     }
-    withConnection(() => state.online.net.send({ type: 'join', code }));
+    withConnection((net) => net.send({ type: 'join', code }));
   });
 
   el.joinCode.addEventListener('keydown', (event) => {
